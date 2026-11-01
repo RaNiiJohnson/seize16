@@ -1,3 +1,5 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -54,19 +56,44 @@ export function BeatPlayer() {
       >
         <View style={[styles.fill, { width: `${progress * 100}%` }]} />
       </Pressable>
-      <View style={styles.controls}>
+      <View style={styles.times}>
         <Text style={styles.time}>{formatTime(status.currentTime)}</Text>
-        <Button icon="play-back" label="5 s" onPress={() => seekBy(-5)} accessibilityLabel="Reculer de 5 secondes" />
-        <Button
-          icon={status.playing ? 'pause' : 'play'}
-          variant="primary"
+        <Text style={styles.time}>{formatTime(duration)}</Text>
+      </View>
+      <View style={styles.controls}>
+        <Pressable
+          onPress={() => seekBy(-5)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Reculer de 5 secondes"
+          style={({ pressed }) => [styles.seek, pressed && { opacity: 0.6 }]}
+        >
+          <MaterialIcons name="replay-5" size={28} color={colors.text} />
+        </Pressable>
+        {/* Lecture en blanc : le rouge est réservé à l'enregistrement. */}
+        <Pressable
           onPress={toggle}
           disabled={!status.isLoaded}
+          accessibilityRole="button"
           accessibilityLabel={status.playing ? 'Pause' : 'Lecture'}
-          style={styles.play}
-        />
-        <Button icon="play-forward" label="5 s" onPress={() => seekBy(5)} accessibilityLabel="Avancer de 5 secondes" />
-        <Text style={[styles.time, { textAlign: 'right' }]}>{formatTime(duration)}</Text>
+          style={({ pressed }) => [styles.play, (pressed || !status.isLoaded) && { opacity: 0.6 }]}
+        >
+          <Ionicons
+            name={status.playing ? 'pause' : 'play'}
+            size={28}
+            color={colors.bg}
+            style={!status.playing && { marginLeft: 3 }}
+          />
+        </Pressable>
+        <Pressable
+          onPress={() => seekBy(5)}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Avancer de 5 secondes"
+          style={({ pressed }) => [styles.seek, pressed && { opacity: 0.6 }]}
+        >
+          <MaterialIcons name="forward-5" size={28} color={colors.text} />
+        </Pressable>
       </View>
     </View>
   );
@@ -77,18 +104,29 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    padding: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    gap: spacing.xs,
   },
-  name: { color: colors.textDim, fontSize: 13 },
+  name: { color: colors.textDim, fontSize: 13, marginBottom: spacing.xs },
   track: {
-    height: 8,
+    height: 6,
     borderRadius: radius.sm,
     backgroundColor: colors.surfaceAlt,
     overflow: 'hidden',
   },
   fill: { height: '100%', backgroundColor: colors.accent },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
-  time: { color: colors.text, fontVariant: ['tabular-nums'], width: 48, fontSize: 15 },
-  play: { width: 64, height: 56, borderRadius: 28 },
+  times: { flexDirection: 'row', justifyContent: 'space-between' },
+  time: { color: colors.textDim, fontVariant: ['tabular-nums'], fontSize: 12 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xl * 1.5 },
+  seek: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  play: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.text,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

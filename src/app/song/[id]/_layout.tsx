@@ -19,6 +19,8 @@ export default function SongLayout() {
           name="index"
           options={{
             title: '',
+            // Sinon Android affiche aussi sa propre flèche à côté de la nôtre.
+            headerBackVisible: false,
             // Premier écran de la pile imbriquée : pas de bouton retour automatique.
             headerLeft: () => (
               <IconButton icon="chevron-back" onPress={() => router.back()} accessibilityLabel="Retour aux morceaux" />

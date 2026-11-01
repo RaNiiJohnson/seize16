@@ -70,7 +70,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[ui.dim, { textAlign: 'center' }]}>
-        Carnet d’artiste {Constants.expoConfig?.version ?? ''} · 100 % hors ligne, sans compte
+        Seize {Constants.expoConfig?.version ?? ''} · 100 % hors ligne, sans compte
       </Text>
     </ScrollView>
   );

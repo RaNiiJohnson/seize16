@@ -117,36 +117,46 @@ export function RecorderBar({
 
   return (
     <View style={styles.bar}>
-      {withBeat && (
+      <View style={styles.header}>
+        <View style={styles.status}>
+          <View style={[styles.dot, recording && { backgroundColor: colors.danger }]} />
+          <Text style={[styles.label, recording && { color: colors.danger }]}>{recording ? 'ENREGISTREMENT' : 'STUDIO'}</Text>
+        </View>
+        <View style={styles.status}>
+          <Text style={styles.small}>{beat.hasBeat ? 'Avec l’instru' : 'Pas d’instru'}</Text>
+          <Switch
+            value={withBeat}
+            onValueChange={setBeatWanted}
+            disabled={!beat.hasBeat || recording}
+            trackColor={{ true: colors.danger, false: colors.surfaceAlt }}
+            thumbColor={colors.text}
+            accessibilityLabel="Enregistrer par-dessus l'instru"
+          />
+        </View>
+      </View>
+      {withBeat && !recording && (
         <View style={styles.warning}>
-          <Ionicons name="headset" size={18} color={colors.warning} />
+          <Ionicons name="headset" size={16} color={colors.warning} />
           <Text style={styles.warningText}>Mets un casque : sinon l’instru sera dans ta prise.</Text>
         </View>
       )}
       <View style={styles.row}>
         <View style={styles.side}>
-          <Switch
-            value={withBeat}
-            onValueChange={setBeatWanted}
-            disabled={!beat.hasBeat || recording}
-            trackColor={{ true: colors.accent, false: colors.surfaceAlt }}
-            accessibilityLabel="Enregistrer par-dessus l'instru"
-          />
-          <Text style={styles.small}>{beat.hasBeat ? 'Instru' : 'Sans instru'}</Text>
+          <Text style={[styles.timer, recording && { color: colors.danger }]}>
+            {formatTime(recState.durationMillis / 1000)}
+          </Text>
         </View>
-
-        <Text style={[styles.timer, recording && { color: colors.danger }]}>
-          {formatTime(recState.durationMillis / 1000)}
-        </Text>
 
         <Pressable
           onPress={recording ? stop : start}
           disabled={busy}
           accessibilityRole="button"
           accessibilityLabel={recording ? "Arrêter l'enregistrement" : 'Enregistrer une prise'}
-          style={({ pressed }) => [styles.rec, recording && styles.recActive, (pressed || busy) && { opacity: 0.7 }]}
+          style={({ pressed }) => [styles.ring, (pressed || busy) && { opacity: 0.7 }]}
         >
-          <Ionicons name={recording ? 'stop' : 'mic'} size={30} color="#fff" />
+          <View style={[styles.rec, recording && styles.recActive]}>
+            <Ionicons name={recording ? 'stop' : 'mic'} size={recording ? 24 : 28} color="#fff" />
+          </View>
         </Pressable>
 
         <View style={[styles.side, { alignItems: 'flex-end' }]}>
@@ -164,27 +174,41 @@ export function RecorderBar({
 }
 
 const styles = StyleSheet.create({
+  // Fond légèrement rougi : on distingue d'un coup d'œil la zone d'enregistrement du lecteur.
   bar: {
-    backgroundColor: colors.surface,
+    backgroundColor: '#1C1519',
     borderTopWidth: 1,
     borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  status: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textDim },
+  label: { color: colors.textDim, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  side: { flex: 1, alignItems: 'flex-start', gap: 2 },
-  small: { color: colors.textDim, fontSize: 12 },
-  timer: { color: colors.text, fontSize: 24, fontVariant: ['tabular-nums'], minWidth: 64, textAlign: 'center' },
-  rec: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.accent,
+  side: { flex: 1, justifyContent: 'center' },
+  small: { color: colors.textDim, fontSize: 13 },
+  timer: { color: colors.text, fontSize: 26, fontWeight: '300', fontVariant: ['tabular-nums'] },
+  ring: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 3,
+    borderColor: 'rgba(255,77,77,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recActive: { backgroundColor: colors.danger },
+  rec: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: colors.danger,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recActive: { width: 44, height: 44, borderRadius: radius.md },
   warning: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -192,7 +216,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,181,71,0.12)',
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.xs + 2,
   },
-  warningText: { color: colors.warning, fontSize: 14, flex: 1, fontWeight: '600' },
+  warningText: { color: colors.warning, fontSize: 13, flex: 1 },
 });

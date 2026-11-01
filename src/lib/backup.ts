@@ -102,7 +102,7 @@ export async function restoreBackup(db: SQLiteDatabase): Promise<BackupSummary |
   try {
     // 1. Lecture et vérification du manifeste.
     const header = await readExactly(r, 12);
-    if (latin1(header.subarray(0, 8)) !== MAGIC) throw new Error("Ce fichier n'est pas une sauvegarde Carnet d'artiste.");
+    if (latin1(header.subarray(0, 8)) !== MAGIC) throw new Error("Ce fichier n'est pas une sauvegarde Seize.");
     const len = new DataView(header.buffer, header.byteOffset).getUint32(8, true);
     const manifest = JSON.parse(utf8Decode(await readExactly(r, len))) as Manifest;
     validate(manifest);
