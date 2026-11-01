@@ -178,6 +178,11 @@ export function listTakes(db: SQLiteDatabase, songId: string) {
   return db.getAllAsync<Take>('SELECT * FROM takes WHERE song_id = ? ORDER BY created_at DESC', songId);
 }
 
+export async function countTakes(db: SQLiteDatabase, songId: string) {
+  const row = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM takes WHERE song_id = ?', songId);
+  return row?.n ?? 0;
+}
+
 export async function addTake(db: SQLiteDatabase, take: Omit<Take, 'id' | 'created_at'>) {
   const id = newId();
   await db.runAsync(

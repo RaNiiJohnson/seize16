@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,11 +16,14 @@ import {
 } from 'react-native';
 import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 
+import { useBeat } from '@/audio/BeatContext';
 import { BeatPlayer } from '@/components/BeatPlayer';
 import { PickerModal } from '@/components/Modals';
+import { RecorderBar } from '@/components/RecorderBar';
 import { Chip, IconButton, styles as ui } from '@/components/ui';
 import {
   addSection,
+  countTakes,
   deleteSection,
   getSong,
   listSections,
@@ -39,6 +42,7 @@ export default function SongEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const db = useSQLiteContext();
   const headerHeight = useHeaderHeight();
+  const beat = useBeat();
 
   const [loaded, setLoaded] = useState(false);
   const [title, setTitle] = useState('');
@@ -46,6 +50,19 @@ export default function SongEditor() {
   const [reorderMode, setReorderMode] = useState(false);
   const [kindPickerFor, setKindPickerFor] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  // Mode studio : la barre d'enregistrement s'ajoute au lecteur, les paroles restent visibles.
+  const [studio, setStudio] = useState(false);
+  const [takeCount, setTakeCount] = useState(0);
+  const [recording, setRecording] = useState(false);
+  // Quitter l'écran couperait la prise en cours (retour, geste, bouton Android).
+  usePreventRemove(recording, () =>
+    Alert.alert('Prise en cours', "Arrête l'enregistrement avant de quitter le morceau."),
+  );
+
+  const loadTakeCount = useCallback(() => {
+    countTakes(db, id).then(setTakeCount).catch(console.error);
+  }, [db, id]);
+  useFocusEffect(loadTakeCount);
 
   useEffect(() => {
     (async () => {
@@ -119,6 +136,8 @@ export default function SongEditor() {
 
   const goTo = async (screen: 'infos' | 'prises') => {
     await flush();
+    // Les prises ont leur propre lecteur : on coupe l'instru pour ne pas superposer.
+    if (screen === 'prises') beat.player.pause();
     router.push(`/song/${id}/${screen}`);
   };
 
@@ -151,8 +170,20 @@ export default function SongEditor() {
                 }}
                 accessibilityLabel={reorderMode ? 'Terminer la réorganisation' : 'Réorganiser les sections'}
               />
-              <IconButton style={styles.headerIcon} icon="mic" onPress={() => goTo('prises')} accessibilityLabel="Prises vocales" />
-              <IconButton style={styles.headerIcon} icon="information-circle" onPress={() => goTo('infos')} accessibilityLabel="Infos" />
+              <IconButton
+                style={styles.headerIcon}
+                icon={studio ? 'mic' : 'mic-outline'}
+                onPress={() => setStudio((v) => !v)}
+                disabled={recording}
+                accessibilityLabel={studio ? 'Fermer le mode studio' : 'Mode studio (enregistrer)'}
+              />
+              <IconButton
+                style={styles.headerIcon}
+                icon="information-circle"
+                onPress={() => goTo('infos')}
+                disabled={recording}
+                accessibilityLabel="Infos"
+              />
               <IconButton style={styles.headerIcon} icon="share-outline" onPress={() => setExportOpen(true)} accessibilityLabel="Exporter" />
             </View>
           ),
@@ -230,6 +261,15 @@ export default function SongEditor() {
           </ScrollView>
         )}
 
+        {studio && (
+          <RecorderBar
+            songId={id}
+            takeCount={takeCount}
+            onSaved={loadTakeCount}
+            onOpenTakes={() => goTo('prises')}
+            onRecordingChange={setRecording}
+          />
+        )}
         <BeatPlayer />
       </KeyboardAvoidingView>
 
