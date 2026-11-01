@@ -70,7 +70,7 @@ export default function SettingsScreen() {
       </View>
 
       <Text style={[ui.dim, { textAlign: 'center' }]}>
-        Seize {Constants.expoConfig?.version ?? ''} · 100 % hors ligne, sans compte
+        Seize16 {Constants.expoConfig?.version ?? ''} · 100 % hors ligne, sans compte
       </Text>
     </ScrollView>
   );
