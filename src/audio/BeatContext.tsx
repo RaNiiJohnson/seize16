@@ -1,11 +1,10 @@
 import { useAudioPlayer, useAudioPlayerStatus, type AudioPlayer, type AudioStatus } from 'expo-audio';
-import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { useSQLiteContext } from 'expo-sqlite';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import { getSong, updateSong } from '@/db/repo';
-import { BEATS_DIR, deleteRelative, ensureDir, extensionOf, uriFromRelative } from '@/lib/files';
+import { BEATS_DIR, deleteRelative, ensureDir, extensionOf, pickFile, uriFromRelative } from '@/lib/files';
 import { newId } from '@/lib/utils';
 
 type BeatContextValue = {
@@ -50,25 +49,24 @@ export function BeatProvider({ songId, children }: { songId: string; children: R
   }, [beatFile, player]);
 
   const importBeat = useCallback(async () => {
-    const res = await DocumentPicker.getDocumentAsync({
-      type: 'audio/*',
-      copyToCacheDirectory: true,
-      multiple: false,
-    });
-    if (res.canceled || !res.assets[0]) return;
-    const asset = res.assets[0];
+    const picked = await pickFile('audio/*');
+    if (!picked) return;
 
     // Copie dans le dossier de l'app : l'instru reste dispo même si l'original est supprimé.
     const dir = ensureDir(BEATS_DIR);
-    const fileName = `${songId}-${newId()}${extensionOf(asset.name, '.mp3')}`;
-    await new File(asset.uri).copy(new File(dir, fileName));
+    const fileName = `${songId}-${newId()}${extensionOf(picked.name, '.mp3')}`;
+    try {
+      await picked.file.copy(new File(dir, fileName));
+    } finally {
+      if (picked.temporary && picked.file.exists) picked.file.delete();
+    }
     const relative = `${BEATS_DIR}/${fileName}`;
 
     const previous = beatFile;
-    await updateSong(db, songId, { beat_file: relative, beat_name: asset.name });
+    await updateSong(db, songId, { beat_file: relative, beat_name: picked.name });
     deleteRelative(previous);
     setBeatFile(relative);
-    setBeatName(asset.name);
+    setBeatName(picked.name);
   }, [beatFile, db, songId]);
 
   const removeBeat = useCallback(async () => {

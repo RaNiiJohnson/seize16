@@ -1,10 +1,9 @@
-import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, FileMode, Paths, type FileHandle } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { SCHEMA_VERSION } from '@/db/migrations';
-import { BEATS_DIR, TAKES_DIR, fileFromRelative } from './files';
+import { BEATS_DIR, TAKES_DIR, fileFromRelative, pickFile } from './files';
 
 /**
  * Format .carnet (un seul fichier, lu/écrit par morceaux de 1 Mo pour ne
@@ -94,9 +93,9 @@ export async function createBackup(db: SQLiteDatabase): Promise<BackupSummary> {
 
 /** Demande un fichier .carnet puis remplace TOUT le contenu de l'app. Renvoie null si annulé. */
 export async function restoreBackup(db: SQLiteDatabase): Promise<BackupSummary | null> {
-  const res = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true, multiple: false });
-  if (res.canceled || !res.assets[0]) return null;
-  const source = new File(res.assets[0].uri);
+  const picked = await pickFile('*/*');
+  if (!picked) return null;
+  const source = picked.file;
 
   const r = source.open(FileMode.ReadOnly);
   const staged: Directory[] = [];
@@ -181,7 +180,8 @@ export async function restoreBackup(db: SQLiteDatabase): Promise<BackupSummary |
       r.close();
     } catch {}
     for (const d of staged) if (d.exists) d.delete();
-    if (source.exists) source.delete();
+    // Seulement la copie temporaire (iOS) : jamais le fichier choisi par l'utilisateur.
+    if (picked.temporary && source.exists) source.delete();
   }
 }
 
