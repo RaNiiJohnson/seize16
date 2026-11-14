@@ -8,6 +8,7 @@ import { PickerModal } from '@/components/Modals';
 import { Button, Chip, Empty, Input, TagList, styles as ui } from '@/components/ui';
 import { createSong, listSongs, type SongListItem, type SongSort } from '@/db/repo';
 import { STATUS_LABELS, type SongStatus } from '@/db/types';
+import { countLines, firstLine } from '@/lib/lyrics';
 import { formatDate, splitTags } from '@/lib/utils';
 import { colors, spacing } from '@/theme';
 
@@ -91,11 +92,16 @@ export default function SongsScreen() {
                 </Text>
               </View>
             </View>
+            {!!firstLine(item.lyrics) && (
+              <Text style={styles.preview} numberOfLines={1}>
+                {firstLine(item.lyrics)}
+              </Text>
+            )}
             <Text style={ui.dim}>
               {[
                 item.bpm ? `${item.bpm} BPM` : null,
                 item.musical_key || null,
-                `${item.section_count} section${item.section_count > 1 ? 's' : ''}`,
+                countLines(item.lyrics) ? `${countLines(item.lyrics)} ligne${countLines(item.lyrics) > 1 ? "s" : ""}` : "Vide",
                 item.take_count ? `${item.take_count} prise${item.take_count > 1 ? 's' : ''}` : null,
                 item.beat_file ? '♪ instru' : null,
               ]
@@ -130,6 +136,7 @@ export default function SongsScreen() {
 }
 
 const styles = StyleSheet.create({
+  preview: { color: colors.text, opacity: 0.75, fontSize: 15, fontStyle: 'italic' },
   header: { padding: spacing.lg, paddingBottom: 0, gap: spacing.md },
   filters: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

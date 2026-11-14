@@ -8,11 +8,15 @@ import { BEATS_DIR, deleteRelative, ensureDir, extensionOf, pickFile, uriFromRel
 import { newId } from '@/lib/utils';
 
 type BeatContextValue = {
+  songId: string;
   player: AudioPlayer;
   status: AudioStatus;
   beatName: string | null;
   hasBeat: boolean;
-  importBeat: () => Promise<void>;
+  /** Ouvre le sélecteur de fichiers du système. Renvoie false si rien n'a été choisi. */
+  importBeat: () => Promise<boolean>;
+  /** Copie ce fichier dans l'app et en fait l'instru du morceau. */
+  setBeatFromFile: (source: File, name: string) => Promise<void>;
   removeBeat: () => Promise<void>;
   seekBy: (deltaSeconds: number) => void;
   toggle: () => void;
@@ -48,26 +52,33 @@ export function BeatProvider({ songId, children }: { songId: string; children: R
     }
   }, [beatFile, player]);
 
+  const setBeatFromFile = useCallback(
+    async (source: File, name: string) => {
+      // Copie dans le dossier de l'app : l'instru reste dispo même si l'original est supprimé.
+      const dir = ensureDir(BEATS_DIR);
+      const fileName = `${songId}-${newId()}${extensionOf(name, '.mp3')}`;
+      await source.copy(new File(dir, fileName));
+      const relative = `${BEATS_DIR}/${fileName}`;
+
+      const previous = beatFile;
+      await updateSong(db, songId, { beat_file: relative, beat_name: name });
+      deleteRelative(previous);
+      setBeatFile(relative);
+      setBeatName(name);
+    },
+    [beatFile, db, songId],
+  );
+
   const importBeat = useCallback(async () => {
     const picked = await pickFile('audio/*');
-    if (!picked) return;
-
-    // Copie dans le dossier de l'app : l'instru reste dispo même si l'original est supprimé.
-    const dir = ensureDir(BEATS_DIR);
-    const fileName = `${songId}-${newId()}${extensionOf(picked.name, '.mp3')}`;
+    if (!picked) return false;
     try {
-      await picked.file.copy(new File(dir, fileName));
+      await setBeatFromFile(picked.file, picked.name);
+      return true;
     } finally {
       if (picked.temporary && picked.file.exists) picked.file.delete();
     }
-    const relative = `${BEATS_DIR}/${fileName}`;
-
-    const previous = beatFile;
-    await updateSong(db, songId, { beat_file: relative, beat_name: picked.name });
-    deleteRelative(previous);
-    setBeatFile(relative);
-    setBeatName(picked.name);
-  }, [beatFile, db, songId]);
+  }, [setBeatFromFile]);
 
   const removeBeat = useCallback(async () => {
     const previous = beatFile;
@@ -98,7 +109,18 @@ export function BeatProvider({ songId, children }: { songId: string; children: R
 
   return (
     <BeatContext.Provider
-      value={{ player, status, beatName, hasBeat: !!beatFile, importBeat, removeBeat, seekBy, toggle }}
+      value={{
+        songId,
+        player,
+        status,
+        beatName,
+        hasBeat: !!beatFile,
+        importBeat,
+        setBeatFromFile,
+        removeBeat,
+        seekBy,
+        toggle,
+      }}
     >
       {children}
     </BeatContext.Provider>

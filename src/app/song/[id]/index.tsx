@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, router, useFocusEffect, useLocalSearchParams, usePreventRemove } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -14,29 +14,18 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import ReorderableList, { reorderItems, useReorderableDrag } from 'react-native-reorderable-list';
 
 import { useBeat } from '@/audio/BeatContext';
 import { BeatPlayer } from '@/components/BeatPlayer';
 import { PickerModal } from '@/components/Modals';
 import { RecorderBar } from '@/components/RecorderBar';
-import { Chip, IconButton, styles as ui } from '@/components/ui';
-import {
-  addSection,
-  countTakes,
-  deleteSection,
-  getSong,
-  listSections,
-  reorderSections,
-  saveSectionContent,
-  setSectionKind,
-  updateSong,
-} from '@/db/repo';
-import { SECTION_KINDS, SECTION_LABELS, type Section, type SectionKind } from '@/db/types';
+import { IconButton, styles as ui } from '@/components/ui';
+import { countTakes, getSong, updateSong } from '@/db/repo';
+import { LYRIC_TAGS } from '@/db/types';
 import { exportSongPdf, exportSongText } from '@/lib/export';
-import { sectionTitles } from '@/lib/sections';
+import { countLines, insertTag, tagLabel } from '@/lib/lyrics';
 import { useAutosave } from '@/lib/useAutosave';
-import { colors, radius, spacing } from '@/theme';
+import { colors, spacing } from '@/theme';
 
 export default function SongEditor() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -46,14 +35,17 @@ export default function SongEditor() {
 
   const [loaded, setLoaded] = useState(false);
   const [title, setTitle] = useState('');
-  const [sections, setSections] = useState<Section[]>([]);
-  const [reorderMode, setReorderMode] = useState(false);
-  const [kindPickerFor, setKindPickerFor] = useState<string | null>(null);
+  const [lyrics, setLyrics] = useState('');
   const [exportOpen, setExportOpen] = useState(false);
   // Mode studio : la barre d'enregistrement s'ajoute au lecteur, les paroles restent visibles.
   const [studio, setStudio] = useState(false);
   const [takeCount, setTakeCount] = useState(0);
   const [recording, setRecording] = useState(false);
+
+  // Curseur : mémorisé à chaque déplacement pour insérer les tags au bon endroit.
+  const lyricsRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const cursor = useRef<number | null>(null);
+
   // Quitter l'écran couperait la prise en cours (retour, geste, bouton Android).
   usePreventRemove(recording, () =>
     Alert.alert('Prise en cours', "Arrête l'enregistrement avant de quitter le morceau."),
@@ -65,23 +57,24 @@ export default function SongEditor() {
   useFocusEffect(loadTakeCount);
 
   useEffect(() => {
-    (async () => {
-      const [song, secs] = await Promise.all([getSong(db, id), listSections(db, id)]);
-      if (!song) {
-        router.back();
-        return;
-      }
-      setTitle(song.title);
-      setSections(secs);
-      setLoaded(true);
-    })().catch(console.error);
+    getSong(db, id)
+      .then((song) => {
+        if (!song) {
+          router.back();
+          return;
+        }
+        setTitle(song.title);
+        setLyrics(song.lyrics);
+        setLoaded(true);
+      })
+      .catch(console.error);
   }, [db, id]);
 
   const { schedule, flush, state: saveState } = useAutosave(
     useCallback(
       async (key: string, value: string) => {
         if (key === 'title') await updateSong(db, id, { title: value });
-        else await saveSectionContent(db, id, key, value);
+        else await updateSong(db, id, { lyrics: value });
       },
       [db, id],
     ),
@@ -92,46 +85,18 @@ export default function SongEditor() {
     schedule('title', v);
   };
 
-  const onChangeSection = (sectionId: string, content: string) => {
-    setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, content } : s)));
-    schedule(sectionId, content);
+  const onChangeLyrics = (v: string) => {
+    setLyrics(v);
+    schedule('lyrics', v);
   };
 
-  const onAdd = async (kind: SectionKind) => {
-    const section = await addSection(db, id, kind);
-    setSections((prev) => [...prev, section]);
-  };
-
-  const onDelete = (section: Section, label: string) => {
-    Alert.alert(`Supprimer « ${label} » ?`, section.content.trim() ? 'Le texte de cette section sera perdu.' : undefined, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Supprimer',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteSection(db, id, section.id);
-          setSections((prev) => prev.filter((s) => s.id !== section.id));
-        },
-      },
-    ]);
-  };
-
-  const onPickKind = async (kind: SectionKind) => {
-    const sectionId = kindPickerFor;
-    setKindPickerFor(null);
-    if (!sectionId) return;
-    await setSectionKind(db, id, sectionId, kind);
-    setSections((prev) => prev.map((s) => (s.id === sectionId ? { ...s, kind } : s)));
-  };
-
-  const onReorder = ({ from, to }: { from: number; to: number }) => {
-    const next = reorderItems(sections, from, to);
-    setSections(next);
-    reorderSections(
-      db,
-      id,
-      next.map((s) => s.id),
-    ).catch(console.error);
+  const onInsertTag = (tag: string) => {
+    const next = insertTag(lyrics, cursor.current ?? lyrics.length, tag);
+    onChangeLyrics(next.text);
+    cursor.current = next.cursor;
+    lyricsRef.current?.focus();
+    // Après le rendu du nouveau texte : curseur sur la ligne sous le tag.
+    setTimeout(() => lyricsRef.current?.setSelection(next.cursor, next.cursor), 50);
   };
 
   const goTo = async (screen: 'infos' | 'prises') => {
@@ -152,7 +117,8 @@ export default function SongEditor() {
     }
   };
 
-  const titles = sectionTitles(sections);
+  const lines = countLines(lyrics);
+  const lineArray = lyrics.split('\n');
 
   return (
     <>
@@ -163,15 +129,6 @@ export default function SongEditor() {
               <SaveBadge state={saveState} />
               <IconButton
                 style={styles.headerIcon}
-                icon={reorderMode ? 'checkmark' : 'reorder-four'}
-                onPress={() => {
-                  void flush();
-                  setReorderMode((m) => !m);
-                }}
-                accessibilityLabel={reorderMode ? 'Terminer la réorganisation' : 'Réorganiser les sections'}
-              />
-              <IconButton
-                style={styles.headerIcon}
                 icon={studio ? 'mic' : 'mic-outline'}
                 onPress={() => setStudio((v) => !v)}
                 disabled={recording}
@@ -179,12 +136,17 @@ export default function SongEditor() {
               />
               <IconButton
                 style={styles.headerIcon}
-                icon="information-circle"
+                icon="information-circle-outline"
                 onPress={() => goTo('infos')}
                 disabled={recording}
                 accessibilityLabel="Infos"
               />
-              <IconButton style={styles.headerIcon} icon="share-outline" onPress={() => setExportOpen(true)} accessibilityLabel="Exporter" />
+              <IconButton
+                style={styles.headerIcon}
+                icon="share-outline"
+                onPress={() => setExportOpen(true)}
+                accessibilityLabel="Exporter"
+              />
             </View>
           ),
         }}
@@ -193,18 +155,9 @@ export default function SongEditor() {
       <KeyboardAvoidingView style={ui.screen} behavior="padding" keyboardVerticalOffset={headerHeight}>
         {!loaded ? (
           <ActivityIndicator style={{ marginTop: 40 }} color={colors.accent} />
-        ) : reorderMode ? (
-          <ReorderableList
-            data={sections}
-            keyExtractor={(s) => s.id}
-            onReorder={onReorder}
-            contentContainerStyle={{ padding: spacing.lg }}
-            ListHeaderComponent={<Text style={[ui.dim, { marginBottom: spacing.sm }]}>Maintiens ≡ et glisse pour réordonner.</Text>}
-            renderItem={({ item, index }) => <ReorderRow section={item} title={titles[index]} />}
-          />
         ) : (
           <ScrollView
-            contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg, paddingBottom: 40 }}
+            contentContainerStyle={styles.page}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
           >
@@ -216,50 +169,62 @@ export default function SongEditor() {
               placeholderTextColor={colors.textDim}
               selectionColor={colors.accent}
               style={styles.title}
+              returnKeyType="next"
+              onSubmitEditing={() => lyricsRef.current?.focus()}
+              submitBehavior="submit"
             />
+            <Text style={styles.meta}>
+              {lines ? `${lines} ligne${lines > 1 ? 's' : ''}` : 'Touche un tag en bas pour structurer ton texte'}
+            </Text>
 
-            {sections.map((s, i) => (
-              <View key={s.id} style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Pressable
-                    onPress={() => setKindPickerFor(s.id)}
-                    style={styles.kindButton}
-                    accessibilityLabel={`Changer le type de ${titles[i]}`}
-                  >
-                    <Text style={styles.kindLabel}>{titles[i]}</Text>
-                    <Ionicons name="chevron-down" size={16} color={colors.accent} />
-                  </Pressable>
-                  <IconButton
-                    icon="trash-outline"
-                    onPress={() => onDelete(s, titles[i])}
-                    accessibilityLabel={`Supprimer ${titles[i]}`}
-                  />
-                </View>
-                <TextInput
-                  value={s.content}
-                  onChangeText={(v) => onChangeSection(s.id, v)}
-                  onBlur={() => void flush()}
-                  multiline
-                  scrollEnabled={false}
-                  placeholder="Écris ici…"
-                  placeholderTextColor={colors.textDim}
-                  selectionColor={colors.accent}
-                  style={styles.lyrics}
-                  autoCapitalize="sentences"
-                />
-              </View>
-            ))}
-
-            <View>
-              <Text style={[ui.dim, { marginBottom: spacing.sm }]}>Ajouter une section</Text>
-              <View style={styles.addRow}>
-                {SECTION_KINDS.map((k) => (
-                  <Chip key={k} label={`+ ${SECTION_LABELS[k]}`} onPress={() => onAdd(k)} />
-                ))}
-              </View>
-            </View>
+            {/* Le texte est rendu en enfants : les lignes « #tag » ressortent en couleur. */}
+            <TextInput
+              ref={lyricsRef}
+              onChangeText={onChangeLyrics}
+              onBlur={() => void flush()}
+              onSelectionChange={(e) => {
+                cursor.current = e.nativeEvent.selection.end;
+              }}
+              multiline
+              scrollEnabled={false}
+              placeholder={'Écris ici…\n\n#intro, #couplet, #refrain : chaque tag ouvre une partie.'}
+              placeholderTextColor={colors.textDim}
+              selectionColor={colors.accent}
+              style={styles.lyrics}
+              autoCapitalize="sentences"
+            >
+              {lyrics
+                ? lineArray.map((line, i) => (
+                    <Text key={i} style={tagLabel(line) ? styles.tagLine : undefined}>
+                      {line}
+                      {i < lineArray.length - 1 ? '\n' : ''}
+                    </Text>
+                  ))
+                : null}
+            </TextInput>
           </ScrollView>
         )}
+
+        <ScrollView
+          horizontal
+          keyboardShouldPersistTaps="always"
+          showsHorizontalScrollIndicator={false}
+          style={styles.tagBar}
+          contentContainerStyle={styles.tagBarContent}
+        >
+          {LYRIC_TAGS.map((tag) => (
+            <Pressable
+              key={tag}
+              onPress={() => onInsertTag(tag)}
+              accessibilityRole="button"
+              accessibilityLabel={`Insérer #${tag}`}
+              style={({ pressed }) => [styles.tagChip, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.tagHash}>#</Text>
+              <Text style={styles.tagChipLabel}>{tag}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         {studio && (
           <RecorderBar
@@ -274,13 +239,6 @@ export default function SongEditor() {
       </KeyboardAvoidingView>
 
       <PickerModal
-        visible={!!kindPickerFor}
-        title="Type de section"
-        options={SECTION_KINDS.map((k) => ({ value: k, label: SECTION_LABELS[k] }))}
-        onCancel={() => setKindPickerFor(null)}
-        onPick={onPickKind}
-      />
-      <PickerModal
         visible={exportOpen}
         title="Exporter les paroles"
         options={[
@@ -291,24 +249,6 @@ export default function SongEditor() {
         onPick={onExport}
       />
     </>
-  );
-}
-
-function ReorderRow({ section, title }: { section: Section; title: string }) {
-  const drag = useReorderableDrag();
-  const preview = section.content.trim().split('\n')[0] || '(vide)';
-  return (
-    <View style={styles.reorderRow}>
-      <Pressable onPressIn={drag} hitSlop={10} style={styles.handle} accessibilityLabel={`Déplacer ${title}`}>
-        <Ionicons name="reorder-three" size={30} color={colors.textDim} />
-      </Pressable>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.kindLabel}>{title}</Text>
-        <Text style={ui.dim} numberOfLines={1}>
-          {preview}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -324,22 +264,33 @@ function SaveBadge({ state }: { state: 'saved' | 'pending' | 'error' }) {
 const styles = StyleSheet.create({
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   headerIcon: { minWidth: 44, width: 44 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '800', paddingVertical: spacing.sm },
-  section: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.xs },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  kindButton: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingRight: spacing.md },
-  kindLabel: { color: colors.accent, fontSize: 15, fontWeight: '700', textTransform: 'uppercase' },
-  lyrics: { color: colors.text, fontSize: 19, lineHeight: 28, minHeight: 84, textAlignVertical: 'top' },
-  addRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  reorderRow: {
+  page: { paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 48 },
+  title: { color: colors.text, fontSize: 28, fontWeight: '800', paddingVertical: spacing.xs, letterSpacing: -0.5 },
+  meta: { color: colors.textDim, fontSize: 13, marginBottom: spacing.lg },
+  lyrics: {
+    color: colors.text,
+    fontSize: 19,
+    lineHeight: 30,
+    minHeight: 320,
+    textAlignVertical: 'top',
+    padding: 0,
+  },
+  tagLine: { color: colors.accent, fontWeight: '800', letterSpacing: 0.5 },
+  tagBar: {
+    flexGrow: 0,
+    backgroundColor: colors.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  tagBarContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.sm },
+  tagChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    minHeight: 64,
-    marginBottom: spacing.sm,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceAlt,
   },
-  handle: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  tagHash: { color: colors.accent, fontSize: 16, fontWeight: '800', marginRight: 2 },
+  tagChipLabel: { color: colors.text, fontSize: 15, fontWeight: '600' },
 });

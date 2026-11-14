@@ -3,20 +3,15 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { getSong, listSections } from '@/db/repo';
-import { STATUS_LABELS, type Section, type Song } from '@/db/types';
-import { sectionTitles } from './sections';
+import { getSong } from '@/db/repo';
+import { STATUS_LABELS, type Song } from '@/db/types';
+import { lyricBlocks } from './lyrics';
 import { safeFileName, splitTags } from './utils';
 
 async function load(db: SQLiteDatabase, songId: string) {
-  const [song, sections] = await Promise.all([getSong(db, songId), listSections(db, songId)]);
+  const song = await getSong(db, songId);
   if (!song) throw new Error('Morceau introuvable');
-  return { song, sections };
-}
-
-function titledSections(sections: Section[]) {
-  const titles = sectionTitles(sections);
-  return sections.map((s, i) => ({ label: titles[i], content: s.content }));
+  return song;
 }
 
 function metaLine(song: Song): string {
@@ -29,14 +24,15 @@ function metaLine(song: Song): string {
     .join(' · ');
 }
 
-export function songToText(song: Song, sections: Section[]): string {
+export function songToText(song: Song): string {
   const lines: string[] = [song.title || 'Sans titre', metaLine(song)];
   if (song.credits.trim()) lines.push(`Crédits : ${song.credits.trim()}`);
   const tags = splitTags(song.tags);
   if (tags.length) lines.push(tags.map((t) => `#${t}`).join(' '));
   lines.push('');
-  for (const s of titledSections(sections)) {
-    lines.push(`[${s.label}]`, s.content.trimEnd(), '');
+  for (const b of lyricBlocks(song.lyrics)) {
+    if (b.label) lines.push(`[${b.label}]`);
+    lines.push(b.text, '');
   }
   return lines.join('\n');
 }
@@ -44,9 +40,9 @@ export function songToText(song: Song, sections: Section[]): string {
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-function songToHtml(song: Song, sections: Section[]): string {
-  const body = titledSections(sections)
-    .map((s) => `<section><h2>${esc(s.label)}</h2><p>${esc(s.content.trimEnd())}</p></section>`)
+function songToHtml(song: Song): string {
+  const body = lyricBlocks(song.lyrics)
+    .map((b) => `<section>${b.label ? `<h2>${esc(b.label)}</h2>` : ''}<p>${esc(b.text)}</p></section>`)
     .join('');
   return `<!doctype html><html><head><meta charset="utf-8" />
   <style>
@@ -55,7 +51,7 @@ function songToHtml(song: Song, sections: Section[]): string {
     .meta { color: #666; font-size: 12px; margin-bottom: 4px; }
     h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #c2185b; margin: 22px 0 6px; }
     p { white-space: pre-wrap; font-size: 15px; line-height: 1.55; margin: 0; }
-    section { break-inside: avoid; }
+    section { break-inside: avoid; margin-bottom: 14px; }
   </style></head><body>
   <h1>${esc(song.title || 'Sans titre')}</h1>
   <div class="meta">${esc(metaLine(song))}</div>
@@ -70,17 +66,17 @@ async function share(file: File, mimeType: string, UTI: string) {
 }
 
 export async function exportSongText(db: SQLiteDatabase, songId: string) {
-  const { song, sections } = await load(db, songId);
+  const song = await load(db, songId);
   const file = new File(Paths.cache, `${safeFileName(song.title)}.txt`);
   file.create({ overwrite: true });
-  await file.write(songToText(song, sections));
+  await file.write(songToText(song));
   await share(file, 'text/plain', 'public.plain-text');
 }
 
 export async function exportSongPdf(db: SQLiteDatabase, songId: string) {
-  const { song, sections } = await load(db, songId);
+  const song = await load(db, songId);
   // Format A4 en points (72 ppp).
-  const { uri } = await Print.printToFileAsync({ html: songToHtml(song, sections), width: 595, height: 842 });
+  const { uri } = await Print.printToFileAsync({ html: songToHtml(song), width: 595, height: 842 });
   // Renomme le PDF (le nom généré est aléatoire).
   const target = new File(Paths.cache, `${safeFileName(song.title)}.pdf`);
   if (target.exists) target.delete();

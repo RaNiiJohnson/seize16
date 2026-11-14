@@ -1,6 +1,31 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 /**
+ * Recopie les sections d'un morceau dans `songs.lyrics` (si les paroles sont
+ * vides), dans l'ordre, chaque section précédée de son tag. Sert à la migration
+ * v2 et à la restauration des sauvegardes faites avant la v2.
+ */
+export const LYRICS_FROM_SECTIONS_SQL = `
+  UPDATE songs SET lyrics = COALESCE((
+    SELECT group_concat(block, char(10) || char(10)) FROM (
+      SELECT CASE x.kind
+          WHEN 'free' THEN rtrim(x.content, char(10) || ' ')
+          ELSE '#' || CASE x.kind
+              WHEN 'verse' THEN 'couplet'
+              WHEN 'chorus' THEN 'refrain'
+              WHEN 'bridge' THEN 'pont'
+              ELSE x.kind END
+            || char(10) || rtrim(x.content, char(10) || ' ')
+        END AS block
+      FROM sections x
+      WHERE x.song_id = songs.id AND (x.kind <> 'free' OR trim(x.content) <> '')
+      ORDER BY x.position
+    )
+  ), '')
+  WHERE lyrics = '' AND EXISTS (SELECT 1 FROM sections y WHERE y.song_id = songs.id);
+`;
+
+/**
  * Chaque entrée = une version du schéma. On n'édite JAMAIS une migration déjà
  * publiée : on en ajoute une nouvelle à la fin. La version courante est stockée
  * dans `PRAGMA user_version`.
@@ -51,6 +76,15 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   );
+  `,
+
+  // v2 : une seule zone de texte par morceau. Les anciennes sections deviennent
+  // des lignes « #intro », « #couplet »… dans `songs.lyrics`. La table `sections`
+  // reste (vide) pour pouvoir relire les anciennes sauvegardes.
+  `
+  ALTER TABLE songs ADD COLUMN lyrics TEXT NOT NULL DEFAULT '';
+  ${LYRICS_FROM_SECTIONS_SQL}
+  DELETE FROM sections;
   `,
 ];
 

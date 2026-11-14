@@ -14,8 +14,8 @@
 ## Fonctionnalités
 
 - **Bibliothèque de morceaux** : recherche, tri, statut (idée, en cours, terminé), BPM, tonalité, crédits et tags.
-- **Éditeur de paroles** : sections (intro, couplet, refrain, pont, outro, libre) réordonnables, sauvegarde automatique.
-- **Lecteur d'instru** : importe un mp3 par morceau, lecture/pause, ±5 s, barre de progression.
+- **Éditeur de paroles** : un seul texte par morceau, structuré avec des tags `#intro`, `#couplet`, `#refrain`, `#pont`, `#outro` insérés d'un geste ; sauvegarde automatique.
+- **Lecteur d'instru** : choisis ton instru dans la liste des sons du téléphone (recherche, filtre par format, pré-écoute) ou via les fichiers ; lecture/pause, ±5 s, barre de progression.
 - **Mode studio** : enregistre ta voix depuis l'éditeur, paroles sous les yeux, avec ou sans l'instru ; l'écran reste allumé pendant la prise.
 - **Prises vocales** : réécoute, renomme, partage ou supprime tes prises.
 - **Carnet d'idées** : notes rapides avec `#tags`, à envoyer ensuite dans un morceau.
@@ -28,7 +28,7 @@ Toutes les données restent sur le téléphone (SQLite + fichiers locaux). Rien 
 
 - [Expo](https://expo.dev) SDK 58, React Native, TypeScript
 - Expo Router (navigation par fichiers dans `src/app/`)
-- expo-sqlite, expo-audio, expo-file-system, expo-print, expo-sharing
+- expo-sqlite, expo-audio, expo-file-system, expo-media-library, expo-print, expo-sharing
 
 ## Démarrer
 

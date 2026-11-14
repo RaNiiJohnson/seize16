@@ -29,6 +29,7 @@ export default function SongLayout() {
         />
         <Stack.Screen name="infos" options={{ title: 'Infos du morceau' }} />
         <Stack.Screen name="prises" options={{ title: 'Prises vocales' }} />
+        <Stack.Screen name="instru" options={{ title: 'Choisir une instru' }} />
       </Stack>
     </BeatProvider>
   );

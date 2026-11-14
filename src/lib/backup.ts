@@ -2,7 +2,7 @@ import { Directory, File, FileMode, Paths, type FileHandle } from 'expo-file-sys
 import * as Sharing from 'expo-sharing';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { SCHEMA_VERSION } from '@/db/migrations';
+import { LYRICS_FROM_SECTIONS_SQL, SCHEMA_VERSION } from '@/db/migrations';
 import { BEATS_DIR, TAKES_DIR, fileFromRelative, pickFile } from './files';
 
 /**
@@ -17,6 +17,7 @@ import { BEATS_DIR, TAKES_DIR, fileFromRelative, pickFile } from './files';
 
 const MAGIC = 'CARNET01';
 const CHUNK = 1024 * 1024;
+// `sections` : vide depuis la v2, gardée pour relire les anciennes sauvegardes.
 const TABLES = ['songs', 'sections', 'takes', 'ideas'] as const;
 const DATA_DIRS = [BEATS_DIR, TAKES_DIR];
 const SAFE_PATH = /^(beats|takes)\/[A-Za-z0-9._-]+$/;
@@ -152,6 +153,9 @@ export async function restoreBackup(db: SQLiteDatabase): Promise<BackupSummary |
             );
           }
         }
+        // Sauvegarde d'avant la v2 : les sections deviennent des paroles avec #tags.
+        await tx.execAsync(LYRICS_FROM_SECTIONS_SQL);
+        await tx.runAsync('DELETE FROM sections');
       });
     } catch (e) {
       // Retour en arrière : on remet les anciens dossiers.

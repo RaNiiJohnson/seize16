@@ -6,18 +6,8 @@ export const STATUS_LABELS: Record<SongStatus, string> = {
   done: 'Terminé',
 };
 
-export type SectionKind = 'intro' | 'verse' | 'chorus' | 'bridge' | 'outro' | 'free';
-
-export const SECTION_KINDS: SectionKind[] = ['intro', 'verse', 'chorus', 'bridge', 'outro', 'free'];
-
-export const SECTION_LABELS: Record<SectionKind, string> = {
-  intro: 'Intro',
-  verse: 'Couplet',
-  chorus: 'Refrain',
-  bridge: 'Pont',
-  outro: 'Outro',
-  free: 'Libre',
-};
+/** Tags de structure insérés dans les paroles (« #intro » sur sa propre ligne). */
+export const LYRIC_TAGS = ['intro', 'couplet', 'refrain', 'pont', 'outro'] as const;
 
 export type Song = {
   id: string;
@@ -31,16 +21,9 @@ export type Song = {
   /** Chemin RELATIF au dossier documents de l'app (ex. "beats/abc.mp3") */
   beat_file: string | null;
   beat_name: string | null;
+  /** Tout le texte du morceau ; les lignes « #intro », « #refrain »… le découpent. */
+  lyrics: string;
   created_at: number;
-  updated_at: number;
-};
-
-export type Section = {
-  id: string;
-  song_id: string;
-  kind: SectionKind;
-  content: string;
-  position: number;
   updated_at: number;
 };
 

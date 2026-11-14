@@ -161,9 +161,9 @@ export default function SongInfos() {
           <Text style={ui.dim}>{beat.hasBeat ? beat.beatName : 'Aucune instru'}</Text>
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <Button
-              icon="folder-open"
-              label={beat.hasBeat ? 'Remplacer' : 'Importer'}
-              onPress={() => beat.importBeat().catch((e) => Alert.alert('Import impossible', String(e)))}
+              icon="musical-notes"
+              label={beat.hasBeat ? 'Changer' : 'Choisir'}
+              onPress={() => router.push(`/song/${beat.songId}/instru`)}
               style={{ flex: 1 }}
             />
             {beat.hasBeat && (
